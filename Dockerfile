@@ -1,4 +1,5 @@
 ARG APP_NAME=slack-to-jira
+
 ############################
 # STEP 1 build executable binary
 ############################
@@ -25,7 +26,7 @@ FROM scratch
 WORKDIR /
 # Copy our static executable.
 ENV APP_PATH=/bin/${APP_NAME}
-COPY --from=builder /go/bin/app /bin/${APP_NAME}
+COPY --from=builder /go/bin/app /bin/slack-to-jira
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 EXPOSE 8080
 # Run the  binary

@@ -36,3 +36,8 @@ docker-push:  docker-build
 	docker push ${IMAGE}:latest
 	docker push ${IMAGE}:alpine-${TAG}
 	docker push ${IMAGE}:alpine-latest
+
+
+.PHONY: deis
+deis: 
+	git push deis master
