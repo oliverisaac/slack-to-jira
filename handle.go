@@ -115,5 +115,7 @@ func (sh *SlackHandler) fetchMessage(channel, timestamp string) (slack.Message, 
 	if len(messageArr.Messages) == 0 {
 		return slack.Message{}, errors.New("Message response is 0")
 	}
-	return messageArr.Messages[0], nil
+	msg := messageArr.Messages[0]
+	msg.Channel = channel
+	return msg, nil
 }
