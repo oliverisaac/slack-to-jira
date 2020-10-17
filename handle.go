@@ -97,7 +97,7 @@ func (sh *SlackHandler) handleEvent(ev *slackevents.ReactionAddedEvent) error {
 	)
 	if err != nil {
 		sh.client.AddReaction("x", messageRef)
-		return errors.Wrap(err, "posting message")
+		return errors.Wrapf(err, "posting message to channel %s, ts %s", threadParent.Channel, threadParent.Timestamp)
 	}
 	return nil
 }
