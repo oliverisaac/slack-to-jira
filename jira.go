@@ -2,6 +2,7 @@ package main
 
 import (
 	"io/ioutil"
+	"strings"
 
 	"github.com/andygrunwald/go-jira"
 	"github.com/pkg/errors"
@@ -34,7 +35,7 @@ func (jh *JiraHandler) CreateTicket(project, title, description string) (string,
 			Project: jira.Project{
 				Key: project,
 			},
-			Summary:     title,
+			Summary:     strings.ReplaceAll(title, "\n", " "),
 			Description: description,
 			Type: jira.IssueType{
 				Name: "Task",

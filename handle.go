@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -105,6 +106,7 @@ func (sh *SlackHandler) handleEvent(ev *slackevents.ReactionAddedEvent) error {
 	}
 
 	ticketTitle := origMessage.Text
+	ticketTitle = strings.Split(ticketTitle, "\n")[0]
 	if len(ticketTitle) > 100 {
 		ticketTitle = ticketTitle[:100]
 	}
