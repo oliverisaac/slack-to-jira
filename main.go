@@ -38,7 +38,8 @@ func (sl *slackListener) handler(w http.ResponseWriter, r *http.Request) {
 	body := buf.String()
 	parseOpts := []slackevents.Option{}
 	if sl.VerificationToken != "" {
-		parseOpts = append(parseOpts, slackevents.OptionVerifyToken(&slackevents.TokenComparator{VerificationToken: "VERIFICATION_TOKEN"}))
+		log.Trace("Using verification token")
+		parseOpts = append(parseOpts, slackevents.OptionVerifyToken(&slackevents.TokenComparator{VerificationToken: sl.VerificationToken}))
 	}
 	eventsAPIEvent, err := slackevents.ParseEvent(json.RawMessage(body), parseOpts...)
 
@@ -77,7 +78,7 @@ func main() {
 		LogFormat              string `arg:"--log-format,env:LOG_FORMAT" default:"text" help:"Set log format, one of: json, text"`
 		Port                   int    `arg:"-p,--port,env" default:"8080" help:"Port to listen on"`
 		SlackToken             string `arg:"-s,--slack-token,env:SLACK_TOKEN" help:"Slack auth token"`
-		SlackVerificationToken string `arg:"-f,--slack-verification-token,env:SLACK_VERIFICATION_TOKEN" help:"Slack verification token"`
+		SlackVerificationToken string `arg:"-f,--slack-verification-token,env:SLACK_VERIFICATION_TOKEN" default:"" help:"Slack verification token"`
 		JiraToken              string `arg:"-j,--jira-token,env:JIRA_TOKEN" help:"Jira auth token"`
 	}
 	arg.MustParse(&args)
