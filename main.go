@@ -67,10 +67,13 @@ func main() {
 			continue
 		}
 		user := ujpArr[0]
+		project := ujpArr[1]
+
 		if !strings.Contains(user, "@") {
-			user = user + strings.TrimLeft(args.DefaultEmailDomain, "@")
+			user = user + "@" + strings.TrimLeft(args.DefaultEmailDomain, "@")
 		}
-		sh.userJiraPairs[user] = ujpArr[1]
+		log.Tracef("Adding user %s for project %s", user, project)
+		sh.userJiraPairs[user] = project
 	}
 
 	go sh.HandleEvents()
