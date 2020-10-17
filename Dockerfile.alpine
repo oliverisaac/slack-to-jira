@@ -1,3 +1,4 @@
+ARG APP_NAME=slack-to-jira
 ############################
 # STEP 1 build executable binary
 ############################
@@ -7,7 +8,6 @@ FROM oliverisaac/slack-to-jira:latest AS bare
 # STEP 2 build a small image
 ############################
 FROM alpine:latest
-ARG APP_NAME
 WORKDIR /
 # Install curl and jq
 RUN apk add --no-cache jq curl

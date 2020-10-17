@@ -1,3 +1,4 @@
+ARG APP_NAME=slack-to-jira
 ############################
 # STEP 1 build executable binary
 ############################
@@ -21,11 +22,10 @@ RUN update-ca-certificates
 # STEP 2 build a small image
 ############################
 FROM scratch
-ARG APP_NAME
 WORKDIR /
 # Copy our static executable.
 ENV APP_PATH=/bin/${APP_NAME}
-COPY --from=builder /go/bin/app ${APP_PATH}
+COPY --from=builder /go/bin/app /bin/${APP_NAME}
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 EXPOSE 8080
 # Run the  binary
