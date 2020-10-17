@@ -17,6 +17,7 @@ type slackListener struct {
 	client            *slack.Client
 	EmojiName         string
 	EventDestination  chan<- *slackevents.ReactionAddedEvent
+	myUserID          string
 }
 
 func newSlackListener(slackToken string, queue chan<- *slackevents.ReactionAddedEvent) *slackListener {
@@ -25,6 +26,11 @@ func newSlackListener(slackToken string, queue chan<- *slackevents.ReactionAdded
 		client:           slack.New(slackToken),
 		EventDestination: queue,
 	}
+	myProfile, err := sl.client.AuthTest()
+	if err != nil {
+		log.Fatal(errors.Wrap(err, "Running initial auth test"))
+	}
+	sl.myUserID = myProfile.UserID
 	return &sl
 }
 
@@ -67,6 +73,10 @@ func (sl *slackListener) handler(w http.ResponseWriter, r *http.Request) {
 			sl.client.PostMessage(ev.Channel, slack.MsgOptionText("Yes, hello.", false))
 		case *slackevents.ReactionAddedEvent:
 			log.Tracef("Received reaction, channel: %s, reaction: %s, user: %s, item type: %s", ev.Item.Channel, ev.Reaction, ev.User, ev.Item.Type)
+			if ev.User == sl.myUserID {
+				log.Tracef("Ignoring reactions from myself %s", ev.User)
+				return
+			}
 			if !(ev.Reaction == sl.EmojiName && ev.Item.Type == "message") {
 				log.Tracef("Ignore reaction %s and type %s", ev.Reaction, ev.Item.Type)
 				return

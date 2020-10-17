@@ -28,6 +28,7 @@ func main() {
 
 		UserJiraPairs      string `arg:"-u,--user-jira-pairs,env:USER_JIRA_PAIRS" help:"Comma separated list of email/jira project pairs. For example: user@example.com=SYS,bob@example.com=PROJ`
 		DefaultEmailDomain string `arg:"--default-email-domain,env:DEFAULT_EMAIL_DOMAIN" help:"Default domain if you do not provide an @ sybmol in a user/jira pair"`
+		ActuallyCreate     string `arg:"--actually-create,env:ACTUALLY_CREATE" default:"false" help:"Set to true to actually create jira ticekts"`
 	}
 	arg.MustParse(&args)
 
@@ -55,6 +56,9 @@ func main() {
 
 	// Create the jira connection
 	tc := newJiraHandler(args.JiraEndpoint, args.JiraUsername, args.JiraPassword)
+	if strings.ToLower(args.ActuallyCreate) == "true" {
+		tc.ActuallyCreate = true
+	}
 
 	// Create the handler
 	sh := newSlackHandler(args.SlackToken, queue, tc)

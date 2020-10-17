@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -14,85 +15,138 @@ type TicketCreator interface {
 	CreateTicket(project, title, content string) (string, error)
 }
 
+const COMPLETED_REACTION = "+1"
+
 type SlackHandler struct {
 	Token             string
 	VerificationToken string
 	EventQueue        <-chan *slackevents.ReactionAddedEvent
 	TicketCreator     TicketCreator
 
+	myUserID      string
 	client        *slack.Client
 	userCache     map[string]*slack.User
 	userJiraPairs map[string]string
+	messageCache  map[string]slack.Message
 }
 
 func newSlackHandler(token string, queue <-chan *slackevents.ReactionAddedEvent, tc TicketCreator) *SlackHandler {
-	return &SlackHandler{
+	sh := &SlackHandler{
 		client:        slack.New(token),
 		EventQueue:    queue,
 		userCache:     make(map[string]*slack.User),
 		userJiraPairs: make(map[string]string),
+		messageCache:  make(map[string]slack.Message),
 		TicketCreator: tc,
 	}
+	myProfile, err := sh.client.AuthTest()
+	if err != nil {
+		log.Fatal(errors.Wrap(err, "Running initial auth test"))
+	}
+	sh.myUserID = myProfile.UserID
+	return sh
 }
 
 func (sh *SlackHandler) HandleEvents() {
 	for {
 		select {
 		case ev := <-sh.EventQueue:
-			err := sh.handleEvent(ev)
+			messageRef := slack.ItemRef{
+				Channel:   ev.Item.Channel,
+				Timestamp: ev.Item.Timestamp,
+			}
+			err := sh.client.AddReaction("hourglass_flowing_sand", messageRef)
+			if err != nil {
+				log.Error(errors.Wrap(err, "Adding wait emoji"))
+			}
+			err = sh.client.RemoveReaction("x", messageRef)
+			if err != nil {
+				log.Error(errors.Wrap(err, "Removing error emoji"))
+			}
+			response, reaction, err := sh.handleEvent(ev)
 			if err != nil {
 				log.Error(errors.Wrap(err, "Failed to handle event"))
+				err = sh.client.AddReaction("x", messageRef)
+				if err != nil {
+					log.Error(errors.Wrap(err, "Adding reaction 'x' on error"))
+				}
+			}
+			if reaction != "" {
+				err := sh.client.AddReaction(reaction, messageRef)
+				if err != nil {
+					log.Error(errors.Wrap(err, "Adding reaction "+reaction))
+				}
+			}
+			if response != "" {
+				err := sh.CommonetOnThread(ev.Item.Channel, ev.Item.Timestamp, response)
+				if err != nil {
+					log.Error(errors.Wrap(err, "Commenting on thread"))
+				}
+			}
+			err = sh.client.RemoveReaction("hourglass_flowing_sand", messageRef)
+			if err != nil {
+				log.Error(errors.Wrap(err, "Removing wait emoji"))
 			}
 		}
 	}
 }
 
-func (sh *SlackHandler) handleEvent(ev *slackevents.ReactionAddedEvent) error {
-	var err error
-	messageRef := slack.ItemRef{
-		Channel:   ev.Item.Channel,
-		Timestamp: ev.Item.Timestamp,
+func (sh *SlackHandler) CommonetOnThread(channel, timestamp, comment string) error {
+	origMessage, err := sh.fetchMessage(channel, timestamp)
+	if err != nil {
+		return errors.Wrap(err, "Fetch message")
 	}
-	sh.client.RemoveReaction("x", messageRef)
+	targetTimestamp := timestamp
+	if origMessage.ThreadTimestamp != "" {
+		targetTimestamp = origMessage.ThreadTimestamp
+	}
+	_, _, err = sh.client.PostMessage(
+		channel,
+		slack.MsgOptionTS(targetTimestamp),
+		slack.MsgOptionText(comment, true),
+	)
+	if err != nil {
+		return errors.Wrap(err, "Comment on thread")
+	}
+	return nil
+}
 
-	sh.client.AddReaction("hourglass_flowing_sand", messageRef)
-	defer sh.client.RemoveReaction("hourglass_flowing_sand", messageRef)
-
+// handleEvent returns back a string and an error
+// If the string is not empty, we post it to the original thread
+func (sh *SlackHandler) handleEvent(ev *slackevents.ReactionAddedEvent) (message string, reaction string, err error) {
 	user, ok := sh.userCache[ev.User]
 	if !ok {
 		user, err = sh.client.GetUserInfo(ev.User)
 		if err != nil {
-			sh.client.AddReaction("x", messageRef)
-			return errors.Wrap(err, "get user info")
+			return "", "", errors.Wrap(err, "get user info")
 		}
 		sh.userCache[ev.User] = user
 	}
 	log.Debugf("Got actionable reaction %s from user %s", ev.Reaction, user.Profile.Email)
+
+	if user.Profile.Email == "" {
+		return "Unable to get user info", "", fmt.Errorf("Unable to get user profile email from %s", ev.User)
+	}
+
 	jiraProject, ok := sh.userJiraPairs[user.Profile.Email]
 	if !ok {
-		sh.client.AddReaction("x", messageRef)
-		return fmt.Errorf("User %s not configured in user_jira_pairs", user.Profile.Email)
+		message := fmt.Sprintf("Email %s is not configured in USER_JIRA_PAIRS", user.Profile.Email)
+		return message, "", errors.New(message)
 	}
 
 	log.Debugf("Need to create a ticket in %s", jiraProject)
-
 	origMessage, err := sh.fetchMessage(ev.Item.Channel, ev.Item.Timestamp)
 	if err != nil {
-		sh.client.AddReaction("x", messageRef)
-		return errors.Wrap(err, "Failed to get original message")
+		return "", "", errors.Wrap(err, "Failed to get original message")
 	}
 
-	threadParent := slack.ItemRef{
-		Channel:   origMessage.Channel,
-		Timestamp: origMessage.Timestamp,
-	}
-
-	if origMessage.ThreadTimestamp != "" {
-		// we are in a thread: https://api.slack.com/messaging/retrieving#threading
-		log.Trace("This message is a thread parent or thread childe")
-		if origMessage.ThreadTimestamp != origMessage.Timestamp {
-			log.Trace("This message is not a thread parent")
-			threadParent.Timestamp = origMessage.ThreadTimestamp
+	for _, reaction := range origMessage.Reactions {
+		if reaction.Name == COMPLETED_REACTION {
+			for _, u := range reaction.Users {
+				if u == sh.myUserID {
+					return "Jira ticket already created for this comment", "x", nil
+				}
+			}
 		}
 	}
 
@@ -101,8 +155,7 @@ func (sh *SlackHandler) handleEvent(ev *slackevents.ReactionAddedEvent) error {
 		Ts:      origMessage.Timestamp,
 	})
 	if err != nil {
-		sh.client.AddReaction("x", messageRef)
-		return errors.Wrap(err, "Failed to get permalink")
+		return "", "", errors.Wrap(err, "Failed to get permalink")
 	}
 
 	ticketTitle := origMessage.Text
@@ -112,27 +165,22 @@ func (sh *SlackHandler) handleEvent(ev *slackevents.ReactionAddedEvent) error {
 	}
 	ticketContent := fmt.Sprintf("From slack: %s\n\n%s", messagePermalink, origMessage.Text)
 	ticketID, err := sh.TicketCreator.CreateTicket(jiraProject, ticketTitle, ticketContent)
-	var response string
+
 	if err != nil {
-		response = "There was an error creating the jira ticket."
-		log.Error(errors.Wrap(err, "Creating jira ticket"))
-	} else {
-		response = fmt.Sprintf("I've created your jira ticket %s: https://jira.1e4h.net/browse/%s", ticketID, ticketID)
+		response := "There was an error creating the jira ticket."
+		return response, "", errors.Wrap(err, "Creating jira ticket")
 	}
 
-	_, _, err = sh.client.PostMessage(
-		threadParent.Channel,
-		slack.MsgOptionTS(threadParent.Timestamp),
-		slack.MsgOptionText(response, true),
-	)
-	if err != nil {
-		sh.client.AddReaction("x", messageRef)
-		return errors.Wrapf(err, "posting message to channel %s, ts %s", threadParent.Channel, threadParent.Timestamp)
-	}
-	return nil
+	response := fmt.Sprintf("I've created your jira ticket %s: https://jira.1e4h.net/browse/%s", ticketID, ticketID)
+	return response, COMPLETED_REACTION, nil
 }
 
 func (sh *SlackHandler) fetchMessage(channel, timestamp string) (slack.Message, error) {
+	cacheKey := fmt.Sprintf("%s:%s", channel, timestamp)
+	if msg, ok := sh.messageCache[cacheKey]; ok {
+		return msg, nil
+	}
+
 	messageArr, err := sh.client.GetConversationHistory(&slack.GetConversationHistoryParameters{
 		ChannelID: channel,
 		Latest:    timestamp,
@@ -147,5 +195,14 @@ func (sh *SlackHandler) fetchMessage(channel, timestamp string) (slack.Message, 
 	}
 	msg := messageArr.Messages[0]
 	msg.Channel = channel
+
+	log.Trace("Settig cache key " + cacheKey)
+	sh.messageCache[cacheKey] = msg
+	// We clear the cache after 5 minutes
+	go func() {
+		time.Sleep(time.Minute * 5)
+		log.Trace("Clearing cache key " + cacheKey)
+		delete(sh.messageCache, cacheKey)
+	}()
 	return msg, nil
 }

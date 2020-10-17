@@ -10,7 +10,8 @@ import (
 )
 
 type JiraHandler struct {
-	client *jira.Client
+	client         *jira.Client
+	ActuallyCreate bool
 }
 
 func newJiraHandler(endpoint, username, password string) *JiraHandler {
@@ -30,6 +31,9 @@ func newJiraHandler(endpoint, username, password string) *JiraHandler {
 }
 
 func (jh *JiraHandler) CreateTicket(project, title, description string) (string, error) {
+	if !jh.ActuallyCreate {
+		return "SYS-960", nil
+	}
 	issue := &jira.Issue{
 		Fields: &jira.IssueFields{
 			Project: jira.Project{
