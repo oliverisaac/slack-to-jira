@@ -22,7 +22,9 @@ func main() {
 		EmojiName              string `arg:"-e,--emoji,env:EMOJI" default:"create-jira-ticket" help:"Emoji name to create a ticket for"`
 		SlackToken             string `arg:"-s,--slack-token,env:SLACK_TOKEN" help:"Slack auth token"`
 		SlackVerificationToken string `arg:"-f,--slack-verification-token,env:SLACK_VERIFICATION_TOKEN" default:"" help:"Slack verification token"`
-		JiraToken              string `arg:"-j,--jira-token,env:JIRA_TOKEN" help:"Jira auth token"`
+		JiraEndpoint           string `arg:"--jira-endpoint,env:JIRA_ENDPOINT" help:"URL to hit with Jira"`
+		JiraUsername           string `arg:"--jira-username,env:JIRA_USERNAME" help:"Jira usernaem to use"`
+		JiraPassword           string `arg:"--jira-password,env:JIRA_PASSWORD" help:"Jira password to use"`
 		UserJiraPairs          string `arg:"-u,--user-jira-pairs,env:USER_JIRA_PAIRS" help:"Comma separated list of email/jira project pairs. For example: user@example.com=SYS,bob@example.com=PROJ`
 	}
 	arg.MustParse(&args)
@@ -49,8 +51,11 @@ func main() {
 	sl.VerificationToken = args.SlackVerificationToken
 	sl.EmojiName = args.EmojiName
 
+	// Create the jira connection
+	tc := newJiraHandler(args.JiraEndpoint, args.JiraUsername, args.JiraPassword)
+
 	// Create the handler
-	sh := newSlackHandler(args.SlackToken, queue)
+	sh := newSlackHandler(args.SlackToken, queue, tc)
 	sh.VerificationToken = args.SlackVerificationToken
 
 	for _, ujp := range strings.Split(args.UserJiraPairs, ",") {

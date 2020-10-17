@@ -9,22 +9,28 @@ import (
 	"github.com/slack-go/slack/slackevents"
 )
 
+type TicketCreator interface {
+	CreateTicket(project, title, content string) (string, error)
+}
+
 type SlackHandler struct {
 	Token             string
 	VerificationToken string
 	EventQueue        <-chan *slackevents.ReactionAddedEvent
+	TicketCreator     TicketCreator
 
 	client        *slack.Client
 	userCache     map[string]*slack.User
 	userJiraPairs map[string]string
 }
 
-func newSlackHandler(token string, queue <-chan *slackevents.ReactionAddedEvent) *SlackHandler {
+func newSlackHandler(token string, queue <-chan *slackevents.ReactionAddedEvent, tc TicketCreator) *SlackHandler {
 	return &SlackHandler{
 		client:        slack.New(token),
 		EventQueue:    queue,
 		userCache:     make(map[string]*slack.User),
 		userJiraPairs: make(map[string]string),
+		TicketCreator: tc,
 	}
 }
 
@@ -89,7 +95,25 @@ func (sh *SlackHandler) handleEvent(ev *slackevents.ReactionAddedEvent) error {
 		}
 	}
 
-	response := fmt.Sprintf("Going to create jira ticket in jira/%s", jiraProject)
+	messagePermalink, err := sh.client.GetPermalink(&slack.PermalinkParameters{
+		Channel: origMessage.Channel,
+		Ts:      origMessage.Timestamp,
+	})
+	if err != nil {
+		sh.client.AddReaction("x", messageRef)
+		return errors.Wrap(err, "Failed to get permalink")
+	}
+
+	ticketTitle := origMessage.Text[:150]
+	ticketContent := fmt.Sprintf("From slack: %s\n\n%s", messagePermalink, origMessage.Text)
+	ticketID, err := sh.TicketCreator.CreateTicket(jiraProject, ticketTitle, ticketContent)
+	var response string
+	if err != nil {
+		response = "There was an error creating the jira ticket."
+	} else {
+		response = fmt.Sprintf("I've created your jira ticket %s: https://jira.1e4h.net/browse/%s", ticketID, ticketID)
+	}
+
 	_, _, err = sh.client.PostMessage(
 		threadParent.Channel,
 		slack.MsgOptionTS(threadParent.Timestamp),
