@@ -63,6 +63,7 @@ func main() {
 	// Create the handler
 	sh := newSlackHandler(args.SlackToken, queue, tc)
 	sh.VerificationToken = args.SlackVerificationToken
+	sh.CompletedReaction = args.EmojiName
 
 	for _, ujp := range strings.Split(args.UserJiraPairs, ",") {
 		ujpArr := strings.Split(ujp, "=")
