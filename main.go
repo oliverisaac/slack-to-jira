@@ -72,7 +72,7 @@ func (sl *slackListener) handler(w http.ResponseWriter, r *http.Request) {
 			sl.client.PostMessage(ev.Channel, slack.MsgOptionText("Yes, hello.", false))
 		case *slackevents.ReactionAddedEvent:
 			log.Tracef("Received reaction, channel: %s, reaction: %s, user: %s, item type: %s", ev.Item.Channel, ev.Reaction, ev.User, ev.Item.Type)
-			if ev.Reaction != sl.EmojiName && ev.Item.Type != "message" {
+			if ev.Reaction != sl.EmojiName || ev.Item.Type != "message" {
 				return
 			}
 
@@ -88,12 +88,20 @@ func (sl *slackListener) handler(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				user, err = sl.client.GetUserInfo(ev.User)
 				if err != nil {
+					sl.client.AddReaction("x", messageRef)
 					log.Error(errors.Wrap(err, "get user info"))
 					return
 				}
 				sl.userCache[ev.User] = user
 			}
 			log.Debugf("Got actionable reaction %s from user %s", ev.Reaction, user.Profile.Email)
+			jiraProject, ok := sl.userJiraPairs[user.Profile.Email]
+			if !ok {
+				sl.client.AddReaction("x", messageRef)
+				return
+			}
+
+			log.Debugf("Need to create a ticket in %s", jiraProject)
 		default:
 			log.Info("Received unexpected innerevent: " + innerEvent.Type)
 		}
