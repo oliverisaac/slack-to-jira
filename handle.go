@@ -3,9 +3,9 @@ package main
 import (
 	"fmt"
 
-	"github.com/nlopes/slack"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 )
 
