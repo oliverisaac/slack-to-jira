@@ -113,6 +113,7 @@ func (sh *SlackHandler) handleEvent(ev *slackevents.ReactionAddedEvent) error {
 	var response string
 	if err != nil {
 		response = "There was an error creating the jira ticket."
+		log.Error(errors.Wrap(err, "Creating jira ticket"))
 	} else {
 		response = fmt.Sprintf("I've created your jira ticket %s: https://jira.1e4h.net/browse/%s", ticketID, ticketID)
 	}
