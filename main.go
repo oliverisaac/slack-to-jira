@@ -26,6 +26,11 @@ func newSlackListener(slackToken string) *slackListener {
 	return &sl
 }
 
+func (sl *slackListener) healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("ok"))
+}
+
 func (sl *slackListener) handler(w http.ResponseWriter, r *http.Request) {
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(r.Body)
@@ -57,6 +62,10 @@ func (sl *slackListener) handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func genericHandler(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("Hello world"))
+}
+
 func main() {
 	var args struct {
 		LogLevel   string `arg:"--log-level,env:LOG_LEVEL" default:"info" help:"Set log level, one of: trace, debug, info, warn, error, fatal"`
@@ -84,7 +93,9 @@ func main() {
 
 	sl := newSlackListener(args.SlackToken)
 
-	http.HandleFunc("/", sl.handler)
+	http.HandleFunc("/slack", sl.handler)
+	http.HandleFunc("/health", sl.healthHandler)
+	http.HandleFunc("/", genericHandler)
 	log.Infof("Going to listen on port :%d", args.Port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", args.Port), nil))
 }
