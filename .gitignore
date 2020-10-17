@@ -1,0 +1,3 @@
+bin/*
+slack-to-jira
+.env
