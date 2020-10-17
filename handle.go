@@ -21,8 +21,10 @@ type SlackHandler struct {
 
 func newSlackHandler(token string, queue <-chan *slackevents.ReactionAddedEvent) *SlackHandler {
 	return &SlackHandler{
-		client:     slack.New(token),
-		EventQueue: queue,
+		client:        slack.New(token),
+		EventQueue:    queue,
+		userCache:     make(map[string]*slack.User),
+		userJiraPairs: make(map[string]string),
 	}
 }
 
