@@ -25,7 +25,9 @@ func main() {
 		JiraEndpoint           string `arg:"--jira-endpoint,env:JIRA_ENDPOINT" help:"URL to hit with Jira"`
 		JiraUsername           string `arg:"--jira-username,env:JIRA_USERNAME" help:"Jira usernaem to use"`
 		JiraPassword           string `arg:"--jira-password,env:JIRA_PASSWORD" help:"Jira password to use"`
-		UserJiraPairs          string `arg:"-u,--user-jira-pairs,env:USER_JIRA_PAIRS" help:"Comma separated list of email/jira project pairs. For example: user@example.com=SYS,bob@example.com=PROJ`
+
+		UserJiraPairs      string `arg:"-u,--user-jira-pairs,env:USER_JIRA_PAIRS" help:"Comma separated list of email/jira project pairs. For example: user@example.com=SYS,bob@example.com=PROJ`
+		DefaultEmailDomain string `arg:"--default-email-domain,env:DEFAULT_EMAIL_DOMAIN" help:"Default domain if you do not provide an @ sybmol in a user/jira pair"`
 	}
 	arg.MustParse(&args)
 
@@ -64,7 +66,11 @@ func main() {
 			log.Error("Invalid user-jira-pair: " + ujp)
 			continue
 		}
-		sh.userJiraPairs[ujpArr[0]] = ujpArr[1]
+		user := ujpArr[0]
+		if !strings.Contains(user, "@") {
+			user = user + strings.TrimLeft(args.DefaultEmailDomain, "@")
+		}
+		sh.userJiraPairs[user] = ujpArr[1]
 	}
 
 	go sh.HandleEvents()
