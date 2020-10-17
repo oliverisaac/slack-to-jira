@@ -72,11 +72,11 @@ func (sl *slackListener) handler(w http.ResponseWriter, r *http.Request) {
 		case *slackevents.AppMentionEvent:
 			sl.client.PostMessage(ev.Channel, slack.MsgOptionText("Yes, hello.", false))
 		case *slackevents.ReactionAddedEvent:
-			log.Tracef("Received reaction, channel: %s, reaction: %s, user: %s, item type: %s", ev.Item.Channel, ev.Reaction, ev.User, ev.Item.Type)
 			if ev.User == sl.myUserID {
-				log.Tracef("Ignoring reactions from myself %s", ev.User)
+				log.Tracef("Ignoring reaction %S from myself %s", ev.Reaction, ev.User)
 				return
 			}
+			log.Tracef("Received reaction, channel: %s, reaction: %s, user: %s, item type: %s", ev.Item.Channel, ev.Reaction, ev.User, ev.Item.Type)
 			if !(ev.Reaction == sl.EmojiName && ev.Item.Type == "message") {
 				log.Tracef("Ignore reaction %s and type %s", ev.Reaction, ev.Item.Type)
 				return

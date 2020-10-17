@@ -32,6 +32,7 @@ func newJiraHandler(endpoint, username, password string) *JiraHandler {
 
 func (jh *JiraHandler) CreateTicket(project, title, description string) (string, error) {
 	if !jh.ActuallyCreate {
+		log.Info("Sending fake ticket back because ACTUALLY_CREATE != true")
 		return "SYS-960", nil
 	}
 	issue := &jira.Issue{

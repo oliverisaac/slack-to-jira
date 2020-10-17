@@ -15,13 +15,12 @@ type TicketCreator interface {
 	CreateTicket(project, title, content string) (string, error)
 }
 
-const COMPLETED_REACTION = "+1"
-
 type SlackHandler struct {
 	Token             string
 	VerificationToken string
 	EventQueue        <-chan *slackevents.ReactionAddedEvent
 	TicketCreator     TicketCreator
+	CompletedReaction string
 
 	myUserID      string
 	client        *slack.Client
@@ -141,8 +140,10 @@ func (sh *SlackHandler) handleEvent(ev *slackevents.ReactionAddedEvent) (message
 	}
 
 	for _, reaction := range origMessage.Reactions {
-		if reaction.Name == COMPLETED_REACTION {
+		log.Tracef("Looking at reaction %s", reaction.Name)
+		if reaction.Name == sh.CompletedReaction {
 			for _, u := range reaction.Users {
+				log.Tracef("User %s reacted with %s", u, reaction.Name)
 				if u == sh.myUserID {
 					return "Jira ticket already created for this comment", "x", nil
 				}
@@ -172,7 +173,7 @@ func (sh *SlackHandler) handleEvent(ev *slackevents.ReactionAddedEvent) (message
 	}
 
 	response := fmt.Sprintf("I've created your jira ticket %s: https://jira.1e4h.net/browse/%s", ticketID, ticketID)
-	return response, COMPLETED_REACTION, nil
+	return response, sh.CompletedReaction, nil
 }
 
 func (sh *SlackHandler) fetchMessage(channel, timestamp string) (slack.Message, error) {
