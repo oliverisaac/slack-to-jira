@@ -199,9 +199,9 @@ func (sh *SlackHandler) fetchMessage(channel, timestamp string) (slack.Message, 
 
 	log.Trace("Settig cache key " + cacheKey)
 	sh.messageCache[cacheKey] = msg
-	// We clear the cache after 5 minutes
+	// We clear the cache after 3 seconds
 	go func() {
-		time.Sleep(time.Minute * 5)
+		time.Sleep(time.Second * 3)
 		log.Trace("Clearing cache key " + cacheKey)
 		delete(sh.messageCache, cacheKey)
 	}()
