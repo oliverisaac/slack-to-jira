@@ -64,7 +64,13 @@ func (sl *slackListener) handler(w http.ResponseWriter, r *http.Request) {
 		switch ev := innerEvent.Data.(type) {
 		case *slackevents.AppMentionEvent:
 			sl.client.PostMessage(ev.Channel, slack.MsgOptionText("Yes, hello.", false))
+		case *slackevents.ReactionAddedEvent:
+			log.Debugf("Received reaction, channel: %s, reaction: %s, user: %s", ev.Item.Channel, ev.Reaction, ev.User)
+		default:
+			log.Info("Received unexpected innerevent: " + innerEvent.Type)
 		}
+	default:
+		log.Info("Received unexpected slackevent: " + eventsAPIEvent.Type)
 	}
 }
 
