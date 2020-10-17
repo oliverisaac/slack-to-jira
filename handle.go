@@ -104,7 +104,10 @@ func (sh *SlackHandler) handleEvent(ev *slackevents.ReactionAddedEvent) error {
 		return errors.Wrap(err, "Failed to get permalink")
 	}
 
-	ticketTitle := origMessage.Text[:150]
+	ticketTitle := origMessage.Text
+	if len(ticketTitle) > 100 {
+		ticketTitle = ticketTitle[:100]
+	}
 	ticketContent := fmt.Sprintf("From slack: %s\n\n%s", messagePermalink, origMessage.Text)
 	ticketID, err := sh.TicketCreator.CreateTicket(jiraProject, ticketTitle, ticketContent)
 	var response string
