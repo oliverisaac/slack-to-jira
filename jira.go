@@ -1,6 +1,8 @@
 package main
 
 import (
+	"io/ioutil"
+
 	"github.com/andygrunwald/go-jira"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -39,8 +41,12 @@ func (jh *JiraHandler) CreateTicket(project, title, description string) (string,
 			},
 		},
 	}
-	issueResp, _, err := jh.client.Issue.Create(issue)
+	issueResp, jiraResponse, err := jh.client.Issue.Create(issue)
+	defer jiraResponse.Body.Close()
+
 	if err != nil {
+		respBody, _ := ioutil.ReadAll(jiraResponse.Body)
+		log.Error("Jira response body: " + string(respBody))
 		return "", errors.Wrap(err, "Error creating issue")
 	}
 	return issueResp.Key, nil
