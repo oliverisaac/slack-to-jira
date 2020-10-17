@@ -17,12 +17,15 @@ type slackListener struct {
 	Token             string
 	VerificationToken string
 	client            *slack.Client
+	EmojiName         string
+	userCache         map[string]*slack.User
 }
 
 func newSlackListener(slackToken string) *slackListener {
 	sl := slackListener{
-		Token:  slackToken,
-		client: slack.New(slackToken),
+		Token:     slackToken,
+		client:    slack.New(slackToken),
+		userCache: make(map[string]*slack.User),
 	}
 	return &sl
 }
@@ -65,7 +68,20 @@ func (sl *slackListener) handler(w http.ResponseWriter, r *http.Request) {
 		case *slackevents.AppMentionEvent:
 			sl.client.PostMessage(ev.Channel, slack.MsgOptionText("Yes, hello.", false))
 		case *slackevents.ReactionAddedEvent:
-			log.Debugf("Received reaction, channel: %s, reaction: %s, user: %s", ev.Item.Channel, ev.Reaction, ev.User)
+			log.Tracef("Received reaction, channel: %s, reaction: %s, user: %s", ev.Item.Channel, ev.Reaction, ev.User)
+			if ev.Reaction != sl.EmojiName {
+				return
+			}
+			user, ok := sl.userCache[ev.User]
+			if !ok {
+				user, err = sl.client.GetUserInfo(ev.User)
+				if err != nil {
+					log.Error(errors.Wrap(err, "get user info"))
+					return
+				}
+				sl.userCache[ev.User] = user
+			}
+			log.Debugf("Got actionable reaction %s from user %s", ev.Reaction, user.Name)
 		default:
 			log.Info("Received unexpected innerevent: " + innerEvent.Type)
 		}
@@ -83,6 +99,7 @@ func main() {
 		LogLevel               string `arg:"--log-level,env:LOG_LEVEL" default:"info" help:"Set log level, one of: trace, debug, info, warn, error, fatal"`
 		LogFormat              string `arg:"--log-format,env:LOG_FORMAT" default:"text" help:"Set log format, one of: json, text"`
 		Port                   int    `arg:"-p,--port,env" default:"8080" help:"Port to listen on"`
+		EmojiName              string `arg:"-e,--emoji,env:EMOJI" default:"create-jira-ticket" help:"Emoji name to create a ticket for"`
 		SlackToken             string `arg:"-s,--slack-token,env:SLACK_TOKEN" help:"Slack auth token"`
 		SlackVerificationToken string `arg:"-f,--slack-verification-token,env:SLACK_VERIFICATION_TOKEN" default:"" help:"Slack verification token"`
 		JiraToken              string `arg:"-j,--jira-token,env:JIRA_TOKEN" help:"Jira auth token"`
@@ -106,6 +123,7 @@ func main() {
 
 	sl := newSlackListener(args.SlackToken)
 	sl.VerificationToken = args.SlackVerificationToken
+	sl.EmojiName = args.EmojiName
 
 	http.HandleFunc("/slack", sl.handler)
 	http.HandleFunc("/health", sl.healthHandler)
