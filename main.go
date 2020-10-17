@@ -14,8 +14,9 @@ import (
 )
 
 type slackListener struct {
-	Token  string
-	client *slack.Client
+	Token             string
+	VerificationToken string
+	client            *slack.Client
 }
 
 func newSlackListener(slackToken string) *slackListener {
@@ -35,7 +36,11 @@ func (sl *slackListener) handler(w http.ResponseWriter, r *http.Request) {
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(r.Body)
 	body := buf.String()
-	eventsAPIEvent, err := slackevents.ParseEvent(json.RawMessage(body), slackevents.OptionVerifyToken(&slackevents.TokenComparator{VerificationToken: "VERIFICATION_TOKEN"}))
+	parseOpts := []slackevents.Option{}
+	if sl.VerificationToken != "" {
+		parseOpts = append(parseOpts, slackevents.OptionVerifyToken(&slackevents.TokenComparator{VerificationToken: "VERIFICATION_TOKEN"}))
+	}
+	eventsAPIEvent, err := slackevents.ParseEvent(json.RawMessage(body), parseOpts...)
 
 	if err != nil {
 		log.Error(errors.Wrap(err, "Parse slack event"))
@@ -68,11 +73,12 @@ func genericHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	var args struct {
-		LogLevel   string `arg:"--log-level,env:LOG_LEVEL" default:"info" help:"Set log level, one of: trace, debug, info, warn, error, fatal"`
-		LogFormat  string `arg:"--log-format,env:LOG_FORMAT" default:"text" help:"Set log format, one of: json, text"`
-		Port       int    `arg:"-p,--port,env" default:"8080" help:"Port to listen on"`
-		SlackToken string `arg:"-s,--slack-token,env:SLACK_TOKEN" help:"Slack auth token"`
-		JiraToken  string `arg:"-j,--jira-token,env:JIRA_TOKEN" help:"Jira auth token"`
+		LogLevel               string `arg:"--log-level,env:LOG_LEVEL" default:"info" help:"Set log level, one of: trace, debug, info, warn, error, fatal"`
+		LogFormat              string `arg:"--log-format,env:LOG_FORMAT" default:"text" help:"Set log format, one of: json, text"`
+		Port                   int    `arg:"-p,--port,env" default:"8080" help:"Port to listen on"`
+		SlackToken             string `arg:"-s,--slack-token,env:SLACK_TOKEN" help:"Slack auth token"`
+		SlackVerificationToken string `arg:"-f,--slack-verification-token,env:SLACK_VERIFICATION_TOKEN" help:"Slack verification token"`
+		JiraToken              string `arg:"-j,--jira-token,env:JIRA_TOKEN" help:"Jira auth token"`
 	}
 	arg.MustParse(&args)
 
@@ -92,6 +98,7 @@ func main() {
 	}
 
 	sl := newSlackListener(args.SlackToken)
+	sl.VerificationToken = args.SlackVerificationToken
 
 	http.HandleFunc("/slack", sl.handler)
 	http.HandleFunc("/health", sl.healthHandler)
