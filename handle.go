@@ -59,16 +59,26 @@ func (sh *SlackHandler) HandleEvents() {
 			if err != nil {
 				log.Error(errors.Wrap(err, "Adding wait emoji"))
 			}
+
 			err = sh.client.RemoveReaction("x", messageRef)
 			if err != nil {
 				log.Error(errors.Wrap(err, "Removing error emoji"))
 			}
-			response, reaction, err := sh.handleEvent(ev)
+
+			response, reaction, handleErr := sh.handleEvent(ev)
 			if err != nil {
 				log.Error(errors.Wrap(err, "Failed to handle event"))
-				err = sh.client.AddReaction("x", messageRef)
-				if err != nil {
-					log.Error(errors.Wrap(err, "Adding reaction 'x' on error"))
+				// If there's an error and a response we'll just send those
+				if response == "" {
+					err := sh.client.AddReaction("x", messageRef)
+					if err != nil {
+						log.Error(errors.Wrap(err, "Adding reaction 'x' on error"))
+					}
+				} else {
+					err := sh.EphemeralCommentOnThread(ev.Item.Channel, ev.Item.Timestamp, ev.User, response)
+					if err != nil {
+						log.Error(errors.Wrap(err, "Ephemeral comment on thread"))
+					}
 				}
 			}
 			if reaction != "" {
@@ -77,8 +87,8 @@ func (sh *SlackHandler) HandleEvents() {
 					log.Error(errors.Wrap(err, "Adding reaction "+reaction))
 				}
 			}
-			if response != "" {
-				err := sh.CommonetOnThread(ev.Item.Channel, ev.Item.Timestamp, response)
+			if response != "" && handleErr == nil {
+				err := sh.CommentOnThread(ev.Item.Channel, ev.Item.Timestamp, response)
 				if err != nil {
 					log.Error(errors.Wrap(err, "Commenting on thread"))
 				}
@@ -91,7 +101,28 @@ func (sh *SlackHandler) HandleEvents() {
 	}
 }
 
-func (sh *SlackHandler) CommonetOnThread(channel, timestamp, comment string) error {
+func (sh *SlackHandler) EphemeralCommentOnThread(channel, timestamp, user, comment string) error {
+	origMessage, err := sh.fetchMessage(channel, timestamp)
+	if err != nil {
+		return errors.Wrap(err, "Fetch message")
+	}
+	targetTimestamp := timestamp
+	if origMessage.ThreadTimestamp != "" {
+		targetTimestamp = origMessage.ThreadTimestamp
+	}
+	_, err = sh.client.PostEphemeral(
+		channel,
+		user,
+		slack.MsgOptionTS(targetTimestamp),
+		slack.MsgOptionText(comment, true),
+	)
+	if err != nil {
+		return errors.Wrap(err, "Ephemeral comment on thread")
+	}
+	return nil
+}
+
+func (sh *SlackHandler) CommentOnThread(channel, timestamp, comment string) error {
 	origMessage, err := sh.fetchMessage(channel, timestamp)
 	if err != nil {
 		return errors.Wrap(err, "Fetch message")
@@ -137,7 +168,7 @@ func (sh *SlackHandler) handleEvent(ev *slackevents.ReactionAddedEvent) (message
 	log.Debugf("Need to create a ticket in %s", jiraProject)
 	origMessage, err := sh.fetchMessage(ev.Item.Channel, ev.Item.Timestamp)
 	if err != nil {
-		return "", "", errors.Wrap(err, "Failed to get original message")
+		return "There was an error fetching the original message", "", errors.Wrap(err, "Failed to get original message")
 	}
 
 	for _, reaction := range origMessage.Reactions {
@@ -146,7 +177,7 @@ func (sh *SlackHandler) handleEvent(ev *slackevents.ReactionAddedEvent) (message
 			for _, u := range reaction.Users {
 				log.Tracef("User %s reacted with %s", u, reaction.Name)
 				if u == sh.myUserID {
-					return "Jira ticket already created for this message", "x", nil
+					return "Jira ticket already created for this message", "", errors.New("Jira ticke already created")
 				}
 			}
 		}
@@ -157,7 +188,7 @@ func (sh *SlackHandler) handleEvent(ev *slackevents.ReactionAddedEvent) (message
 		Ts:      origMessage.Timestamp,
 	})
 	if err != nil {
-		return "", "", errors.Wrap(err, "Failed to get permalink")
+		return "There was an error fetching the permalink", "", errors.Wrap(err, "Failed to get permalink")
 	}
 
 	ticketTitle := origMessage.Text
