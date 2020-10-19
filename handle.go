@@ -54,6 +54,7 @@ func (sh *SlackHandler) HandleEvents() {
 				Channel:   ev.Item.Channel,
 				Timestamp: ev.Item.Timestamp,
 			}
+			sh.clearCache(ev.Item.Channel, ev.Item.Timestamp)
 			err := sh.client.AddReaction("hourglass_flowing_sand", messageRef)
 			if err != nil {
 				log.Error(errors.Wrap(err, "Adding wait emoji"))
@@ -202,8 +203,15 @@ func (sh *SlackHandler) fetchMessage(channel, timestamp string) (slack.Message, 
 	// We clear the cache after 3 seconds
 	go func() {
 		time.Sleep(time.Second * 3)
-		log.Trace("Clearing cache key " + cacheKey)
-		delete(sh.messageCache, cacheKey)
+		sh.clearCache(channel, timestamp)
 	}()
 	return msg, nil
+}
+
+func (sh *SlackHandler) clearCache(channel, timestamp string) {
+	cacheKey := fmt.Sprintf("%s:%s", channel, timestamp)
+	if _, ok := sh.messageCache[cacheKey]; ok {
+		log.Trace("Clearing cache key " + cacheKey)
+		delete(sh.messageCache, cacheKey)
+	}
 }

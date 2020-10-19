@@ -47,7 +47,7 @@ func main() {
 		log.Error("Unknown log format given: " + args.LogFormat)
 	}
 
-	queue := make(chan *slackevents.ReactionAddedEvent)
+	queue := make(chan *slackevents.ReactionAddedEvent, 1)
 
 	// Create the listener
 	sl := newSlackListener(args.SlackToken, queue)
