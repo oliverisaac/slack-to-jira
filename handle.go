@@ -145,7 +145,7 @@ func (sh *SlackHandler) handleEvent(ev *slackevents.ReactionAddedEvent) (message
 			for _, u := range reaction.Users {
 				log.Tracef("User %s reacted with %s", u, reaction.Name)
 				if u == sh.myUserID {
-					return "Jira ticket already created for this comment", "x", nil
+					return "Jira ticket already created for this message", "x", nil
 				}
 			}
 		}
